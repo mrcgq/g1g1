@@ -3,21 +3,14 @@
 # ═══════════════════════════════════════════════════════════════════
 
 # 监听地址
-# 格式: ":端口" 或 "IP:端口"
 listen: ":54321"
 
 # 预共享密钥 (Base64 编码, 32 字节)
-# 生成方法: openssl rand -base64 32
-# 或使用: make gen-psk
-psk: "在这里填入你的PSK"
+# 生成: ./phantom-server -gen-psk
+psk: "这里填入你的PSK"
 
 # 时间窗口 (秒)
-# 用于 TSKD 密钥派生，建议 30-60 秒
-# 客户端和服务端必须时钟同步（误差 < 窗口大小）
 time_window: 30
 
-# 日志级别
-# debug: 详细调试信息
-# info:  普通运行信息
-# error: 仅错误信息
+# 日志级别: debug, info, error
 log_level: "info"
