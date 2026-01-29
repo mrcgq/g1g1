@@ -1,7 +1,3 @@
-#═══════════════════════════════════════════════════════════════════
-# Phantom Server v2.0 - 自动发布
-#═══════════════════════════════════════════════════════════════════
-
 name: Release
 
 on:
@@ -23,9 +19,6 @@ permissions:
   contents: write
 
 jobs:
-  # ═══════════════════════════════════════════════════════════════
-  # 准备发布
-  # ═══════════════════════════════════════════════════════════════
   prepare:
     name: Prepare
     runs-on: ubuntu-latest
@@ -44,11 +37,7 @@ jobs:
           VERSION="${TAG#v}"
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "📦 发布版本: ${VERSION}"
 
-  # ═══════════════════════════════════════════════════════════════
-  # 多平台构建
-  # ═══════════════════════════════════════════════════════════════
   build:
     name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ubuntu-latest
@@ -85,6 +74,7 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+          cache-dependency-path: go.sum
 
       - name: 下载依赖
         run: go mod download
@@ -114,27 +104,27 @@ jobs:
             ./cmd/phantom-server
           
           echo "BINARY=${BINARY}" >> $GITHUB_ENV
+          echo "ARCH_SUFFIX=${ARCH_SUFFIX}" >> $GITHUB_ENV
 
       - name: 打包
         run: |
-          ARCHIVE="${BINARY%.exe}"
+          ARCHIVE_NAME="${{ env.BINARY_NAME }}-${{ matrix.goos }}-${{ env.ARCH_SUFFIX }}"
           
           mkdir -p package
-          cp "${BINARY}" package/
+          cp "${{ env.BINARY }}" package/
           cp configs/config.example.yaml package/config.yaml
           cp README.md package/
-          cp LICENSE package/ 2>/dev/null || echo "MIT License" > package/LICENSE
+          cp LICENSE package/
           
           if [[ "${{ matrix.goos }}" == "windows" ]]; then
-            cd package && zip -r "../${ARCHIVE}.zip" . && cd ..
-            echo "ARCHIVE=${ARCHIVE}.zip" >> $GITHUB_ENV
+            cd package && zip -r "../${ARCHIVE_NAME}.zip" . && cd ..
+            echo "ARCHIVE=${ARCHIVE_NAME}.zip" >> $GITHUB_ENV
           else
-            tar -czvf "${ARCHIVE}.tar.gz" -C package .
-            echo "ARCHIVE=${ARCHIVE}.tar.gz" >> $GITHUB_ENV
+            tar -czvf "${ARCHIVE_NAME}.tar.gz" -C package .
+            echo "ARCHIVE=${ARCHIVE_NAME}.tar.gz" >> $GITHUB_ENV
           fi
           
-          # 生成校验和
-          sha256sum "${ARCHIVE}"* > "${ARCHIVE}.sha256"
+          sha256sum "${{ env.ARCHIVE }}" > "${{ env.ARCHIVE }}.sha256"
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
@@ -146,9 +136,6 @@ jobs:
             *.sha256
           retention-days: 1
 
-  # ═══════════════════════════════════════════════════════════════
-  # 创建 Release
-  # ═══════════════════════════════════════════════════════════════
   release:
     name: Release
     runs-on: ubuntu-latest
@@ -167,17 +154,12 @@ jobs:
         run: |
           mkdir -p release
           find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.sha256" \) -exec mv {} release/ \;
-          
-          # 汇总校验和
-          cd release
-          cat *.sha256 > checksums.txt
+          cd release && cat *.sha256 > checksums.txt
           ls -la
 
       - name: 生成发布说明
         run: |
-          VERSION="${{ needs.prepare.outputs.version }}"
           TAG="${{ needs.prepare.outputs.tag }}"
-          
           cat > release-notes.md << EOF
           # 🚀 Phantom Server ${TAG}
           
@@ -186,25 +168,24 @@ jobs:
           - 🎯 **极简设计** - 约 600 行核心代码
           - 🔒 **TSKD 认证** - 时间同步密钥派生，0-RTT
           - 🛡️ **ChaCha20-Poly1305** - 高性能 AEAD 加密
-          - 👻 **抗探测** - 全密文，无特征，静默丢弃
-          - 📦 **无状态** - 每包独立验证，无会话管理
+          - 👻 **抗探测** - 全密文传输，静默丢弃
           
           ## 📦 下载
           
           | 平台 | 架构 | 下载 |
           |------|------|------|
-          | Linux | amd64 | [phantom-server-linux-amd64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${TAG}/phantom-server-linux-amd64.tar.gz) |
-          | Linux | arm64 | [phantom-server-linux-arm64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${TAG}/phantom-server-linux-arm64.tar.gz) |
-          | Linux | armv7 | [phantom-server-linux-armv7.tar.gz](https://github.com/${{ github.repository }}/releases/download/${TAG}/phantom-server-linux-armv7.tar.gz) |
-          | macOS | amd64 | [phantom-server-darwin-amd64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${TAG}/phantom-server-darwin-amd64.tar.gz) |
-          | macOS | arm64 | [phantom-server-darwin-arm64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${TAG}/phantom-server-darwin-arm64.tar.gz) |
-          | Windows | amd64 | [phantom-server-windows-amd64.zip](https://github.com/${{ github.repository }}/releases/download/${TAG}/phantom-server-windows-amd64.zip) |
-          | FreeBSD | amd64 | [phantom-server-freebsd-amd64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${TAG}/phantom-server-freebsd-amd64.tar.gz) |
+          | Linux | amd64 | [phantom-server-linux-amd64.tar.gz](https://github.com/mrcgq/g1g1/releases/download/${TAG}/phantom-server-linux-amd64.tar.gz) |
+          | Linux | arm64 | [phantom-server-linux-arm64.tar.gz](https://github.com/mrcgq/g1g1/releases/download/${TAG}/phantom-server-linux-arm64.tar.gz) |
+          | Linux | armv7 | [phantom-server-linux-armv7.tar.gz](https://github.com/mrcgq/g1g1/releases/download/${TAG}/phantom-server-linux-armv7.tar.gz) |
+          | macOS | amd64 | [phantom-server-darwin-amd64.tar.gz](https://github.com/mrcgq/g1g1/releases/download/${TAG}/phantom-server-darwin-amd64.tar.gz) |
+          | macOS | arm64 | [phantom-server-darwin-arm64.tar.gz](https://github.com/mrcgq/g1g1/releases/download/${TAG}/phantom-server-darwin-arm64.tar.gz) |
+          | Windows | amd64 | [phantom-server-windows-amd64.zip](https://github.com/mrcgq/g1g1/releases/download/${TAG}/phantom-server-windows-amd64.zip) |
+          | FreeBSD | amd64 | [phantom-server-freebsd-amd64.tar.gz](https://github.com/mrcgq/g1g1/releases/download/${TAG}/phantom-server-freebsd-amd64.tar.gz) |
           
           ## 🚀 一键安装
           
           \`\`\`bash
-          bash <(curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.sh)
+          bash <(curl -fsSL https://raw.githubusercontent.com/mrcgq/g1g1/main/scripts/install.sh)
           \`\`\`
           
           ## 📋 校验和
@@ -226,7 +207,7 @@ jobs:
           name: Phantom Server ${{ needs.prepare.outputs.tag }}
           body_path: release-notes.md
           draft: false
-          prerelease: ${{ contains(needs.prepare.outputs.tag, 'alpha') || contains(needs.prepare.outputs.tag, 'beta') || contains(needs.prepare.outputs.tag, 'rc') }}
+          prerelease: ${{ contains(needs.prepare.outputs.tag, 'alpha') || contains(needs.prepare.outputs.tag, 'beta') }}
           files: |
             release/*.tar.gz
             release/*.zip
@@ -234,31 +215,3 @@ jobs:
             release/checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # ═══════════════════════════════════════════════════════════════
-  # 更新安装脚本版本
-  # ═══════════════════════════════════════════════════════════════
-  update-script:
-    name: Update Install Script
-    runs-on: ubuntu-latest
-    needs: [prepare, release]
-    if: ${{ !contains(needs.prepare.outputs.tag, 'alpha') && !contains(needs.prepare.outputs.tag, 'beta') }}
-    steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 更新版本号
-        run: |
-          VERSION="${{ needs.prepare.outputs.version }}"
-          sed -i "s/^VERSION=.*/VERSION=\"${VERSION}\"/" scripts/install.sh
-          echo "✅ 更新 install.sh 版本到 ${VERSION}"
-
-      - name: 提交
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "chore: bump version to ${{ needs.prepare.outputs.tag }}"
-          file_pattern: scripts/install.sh
-          branch: main
