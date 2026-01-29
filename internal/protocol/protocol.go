@@ -6,20 +6,17 @@ import (
 	"net"
 )
 
-// 数据包类型
 const (
 	TypeRequest  = 0x01
 	TypeResponse = 0x02
 )
 
-// 地址类型
 const (
 	AddrIPv4   = 0x01
 	AddrIPv6   = 0x04
 	AddrDomain = 0x03
 )
 
-// 网络类型
 const (
 	NetworkTCP = 0x01
 	NetworkUDP = 0x02
@@ -27,11 +24,11 @@ const (
 
 // Request 解析后的请求
 type Request struct {
-	Type     byte
-	Network  string
-	Address  string
-	Port     uint16
-	Data     []byte
+	Type    byte
+	Network string
+	Address string
+	Port    uint16
+	Data    []byte
 }
 
 // ParseRequest 解析请求
@@ -44,7 +41,6 @@ func ParseRequest(data []byte) (*Request, error) {
 		Type: data[0],
 	}
 
-	// Network
 	switch data[1] {
 	case NetworkTCP:
 		req.Network = "tcp"
@@ -54,7 +50,6 @@ func ParseRequest(data []byte) (*Request, error) {
 		return nil, fmt.Errorf("未知网络类型: %d", data[1])
 	}
 
-	// Address
 	addrType := data[2]
 	offset := 3
 
@@ -89,14 +84,12 @@ func ParseRequest(data []byte) (*Request, error) {
 		return nil, fmt.Errorf("未知地址类型: %d", addrType)
 	}
 
-	// Port
 	if len(data) < offset+2 {
 		return nil, fmt.Errorf("端口缺失")
 	}
 	req.Port = binary.BigEndian.Uint16(data[offset : offset+2])
 	offset += 2
 
-	// Data
 	if len(data) > offset {
 		req.Data = data[offset:]
 	}
@@ -108,7 +101,7 @@ func ParseRequest(data []byte) (*Request, error) {
 func BuildResponse(data []byte) []byte {
 	resp := make([]byte, 2+len(data))
 	resp[0] = TypeResponse
-	resp[1] = 0x00 // 成功
+	resp[1] = 0x00
 	copy(resp[2:], data)
 	return resp
 }
@@ -118,7 +111,7 @@ func BuildErrorResponse(code byte) []byte {
 	return []byte{TypeResponse, code}
 }
 
-// TargetAddr 返回目标地址字符串
+// TargetAddr 返回目标地址
 func (r *Request) TargetAddr() string {
 	return fmt.Sprintf("%s:%d", r.Address, r.Port)
 }
