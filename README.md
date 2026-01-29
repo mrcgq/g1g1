@@ -1,147 +1,101 @@
-
-
 # Phantom Server v2.0
 
-[![Build](https://github.com/anthropics/phantom-server/actions/workflows/build.yml/badge.svg)](https://github.com/anthropics/phantom-server/actions/workflows/build.yml)
-[![Release](https://img.shields.io/github/v/release/anthropics/phantom-server)](https://github.com/anthropics/phantom-server/releases)
-[![License](https://img.shields.io/github/license/anthropics/phantom-server)](LICENSE)
-
-
-
+[![Build](https://github.com/mrcgq/g1g1/actions/workflows/build.yml/badge.svg)](https://github.com/mrcgq/g1g1/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/mrcgq/g1g1)](https://github.com/mrcgq/g1g1/releases)
 
 ## 极简 · 无状态 · 抗探测
 
-Phantom 是一个极简的 UDP 代理协议，专为对抗网络审查设计。
-
-
-
-
-┌─────────────────────────────────────────────────────────────────┐
-│ 设计原则 │
-├─────────────────────────────────────────────────────────────────┤
-│ • Zero Handshake - 首包即数据，无任何握手 │
-│ • Zero State - 服务端无状态，每包独立验证 │
-│ • Zero Signature - 全密文传输，无协议特征 │
-│ • 简单优先 - 约 600 行核心代码 │
-└─────────────────────────────────────────────────────────────────┘
-
-
-
-
-text
-
+Phantom 是一个极简的加密 UDP 代理协议。
 
 ## 🚀 快速开始
 
 ### 一键安装
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/anthropics/phantom-server/main/scripts/install.sh)
-手动安装
-Bash
+bash <(curl -fsSL https://raw.githubusercontent.com/mrcgq/g1g1/main/scripts/install.sh)
 
+手动安装
 # 下载
-wget https://github.com/anthropics/phantom-server/releases/latest/download/phantom-server-linux-amd64.tar.gz
+wget https://github.com/mrcgq/g1g1/releases/latest/download/phantom-server-linux-amd64.tar.gz
 tar -xzf phantom-server-linux-amd64.tar.gz
 
 # 生成 PSK
-openssl rand -base64 32
-# 输出: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx==
+./phantom-server -gen-psk
 
-# 编辑配置
+# 创建配置
 cat > config.yaml << EOF
 listen: ":54321"
-psk: "你生成的PSK"
+psk: "你的PSK"
 time_window: 30
 log_level: "info"
 EOF
 
 # 运行
 ./phantom-server -c config.yaml
-📦 协议格式
-text
 
-┌──────────────────────────────────────────────────────────────────┐
-│                        数据包结构                                │
-├──────────┬──────────┬──────────┬─────────────────┬──────────────┤
-│ UserID   │ Timestamp│ Nonce    │ Encrypted Data  │ Auth Tag     │
-│ 4 bytes  │ 2 bytes  │ 12 bytes │ Variable        │ 16 bytes     │
-├──────────┴──────────┼──────────┴─────────────────┴──────────────┤
-│     明文头部        │              加密部分                       │
-│     (快速过滤)      │        (ChaCha20-Poly1305)                 │
-└─────────────────────┴───────────────────────────────────────────┘
-TSKD (时间同步密钥派生)
-text
+⚙️ 配置
+参数	默认值	说明
+listen	:54321	监听地址
+psk	必填	Base64 编码的 32 字节密钥
+time_window	30	时间窗口（秒）
+log_level	info	日志级别
 
-SessionKey = HKDF(PSK, TimeWindow, "phantom-key-v2")
-
-TimeWindow = Unix时间戳 / 30 秒
-每 30 秒密钥自动轮换
-允许 ±1 个窗口容差（处理时钟偏差）
-无需握手，首包即可验证
-⚙️ 配置说明
-参数	说明	默认值
-listen	监听地址	:54321
-psk	Base64 编码的 32 字节密钥	必填
-time_window	TSKD 时间窗口（秒）	30
-log_level	日志级别 (debug/info/error)	info
-🔧 管理命令
-Bash
-
+🔧 管理
 # 使用管理脚本
-bash install.sh          # 显示菜单
-bash install.sh status   # 查看状态
-bash install.sh link     # 显示分享链接
-bash install.sh logs     # 查看日志
+bash install.sh          # 菜单
+bash install.sh status   # 状态
+bash install.sh link     # 分享链接
 
-# 使用 systemd
+# 使用 systemctl
 systemctl start phantom
 systemctl stop phantom
-systemctl restart phantom
 systemctl status phantom
 journalctl -u phantom -f
-🛡️ 安全特性
-抗探测
 
-全密文传输，无明文特征
-无效包静默丢弃，不响应
-无固定协议头或握手
-抗重放
 
-Nonce 唯一性检查
-时间戳窗口验证
-自动过期清理
-快速过滤
-
-UserID 前置验证（4 字节）
-无需解密即可丢弃无效包
-📊 性能
-内存占用：约 10-20 MB
-单核处理：10万+ 包/秒
-延迟开销：< 1ms
-🔨 构建
-Bash
-
-# 安装依赖
-go mod download
-
-# 构建当前平台
-make build
-
-# 构建所有平台
-make release
-
-# 运行测试
-make test
 📄 许可证
 MIT License
 
-text
-
-
 ---
 
-## 9. go.sum (运行 `go mod tidy` 自动生成)
+### 16. scripts/install.sh
+
+由于这个文件很长（约 900 行），我只修改关键部分。你需要把之前给的完整 `install.sh` 中的以下内容替换：
+
+**找到并替换这些变量：**
 
 ```bash
-go mod tidy
+# 在文件开头找到这些变量，修改为：
+VERSION="2.0.0"
+GITHUB_REPO="mrcgq/g1g1"
+
+目录结构确认
+g1g1/
+├── .github/
+│   └── workflows/
+│       ├── build.yml
+│       └── release.yml
+├── .gitignore
+├── .golangci.yml
+├── cmd/
+│   └── phantom-server/
+│       └── main.go
+├── configs/
+│   └── config.example.yaml
+├── internal/
+│   ├── crypto/
+│   │   ├── crypto.go
+│   │   └── crypto_test.go
+│   ├── protocol/
+│   │   ├── protocol.go
+│   │   └── protocol_test.go
+│   └── server/
+│       └── server.go
+├── scripts/
+│   └── install.sh
+├── go.mod
+├── go.sum
+├── LICENSE
+├── Makefile
+└── README.md
+
