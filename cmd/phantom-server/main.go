@@ -10,6 +10,7 @@ import (
 
 	"github.com/anthropics/phantom-server/internal/crypto"
 	"github.com/anthropics/phantom-server/internal/server"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -86,7 +87,7 @@ func main() {
 func loadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("读取配置文件失败: %w", err)
 	}
 
 	cfg := &Config{
@@ -96,7 +97,7 @@ func loadConfig(path string) (*Config, error) {
 	}
 
 	if err := yaml.Unmarshal(data, cfg); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("解析配置文件失败: %w", err)
 	}
 
 	if cfg.PSK == "" {
