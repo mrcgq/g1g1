@@ -54,7 +54,7 @@ func New(pskBase64 string, timeWindow int) (*Crypto, error) {
 func (c *Crypto) deriveUserID() [UserIDSize]byte {
 	var id [UserIDSize]byte
 	reader := hkdf.New(sha256.New, c.psk, nil, []byte("phantom-userid-v2"))
-	io.ReadFull(reader, id[:])
+	_, _ = io.ReadFull(reader, id[:])
 	return id
 }
 
@@ -70,7 +70,7 @@ func (c *Crypto) deriveKey(window int64) []byte {
 
 	reader := hkdf.New(sha256.New, c.psk, salt, []byte("phantom-key-v2"))
 	key := make([]byte, chacha20poly1305.KeySize)
-	io.ReadFull(reader, key)
+	_, _ = io.ReadFull(reader, key)
 	return key
 }
 
@@ -86,28 +86,25 @@ func (c *Crypto) validWindows() []int64 {
 }
 
 // Encrypt 加密数据
-// 返回: [UserID(4)] + [Timestamp(2)] + [Nonce(12)] + [Ciphertext] + [Tag(16)]
 func (c *Crypto) Encrypt(plaintext []byte) ([]byte, error) {
 	window := c.currentWindow()
 	key := c.deriveKey(window)
 
 	aead, err := chacha20poly1305.New(key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("创建 AEAD 失败: %w", err)
 	}
 
 	// 生成随机 nonce
 	nonce := make([]byte, NonceSize)
 	if _, err := rand.Read(nonce); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("生成 nonce 失败: %w", err)
 	}
 
 	// 时间戳（当前 Unix 时间的低 16 位）
 	timestamp := uint16(time.Now().Unix() & 0xFFFF)
 
 	// 构建输出
-	// Header: UserID(4) + Timestamp(2)
-	// Body: Nonce(12) + Ciphertext + Tag(16)
 	output := make([]byte, HeaderSize+NonceSize+len(plaintext)+TagSize)
 
 	copy(output[:UserIDSize], c.userID[:])
@@ -122,11 +119,10 @@ func (c *Crypto) Encrypt(plaintext []byte) ([]byte, error) {
 }
 
 // Decrypt 解密数据
-// 输入: [UserID(4)] + [Timestamp(2)] + [Nonce(12)] + [Ciphertext] + [Tag(16)]
 func (c *Crypto) Decrypt(data []byte) ([]byte, error) {
 	minSize := HeaderSize + NonceSize + TagSize
 	if len(data) < minSize {
-		return nil, fmt.Errorf("数据太短")
+		return nil, fmt.Errorf("数据太短: %d < %d", len(data), minSize)
 	}
 
 	// 验证 UserID
@@ -161,7 +157,7 @@ func (c *Crypto) Decrypt(data []byte) ([]byte, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("解密失败")
+	return nil, fmt.Errorf("解密失败: 所有时间窗口都无法解密")
 }
 
 // validateTimestamp 验证时间戳是否在有效范围内
@@ -188,7 +184,7 @@ func (c *Crypto) validateTimestamp(ts uint16) bool {
 func GeneratePSK() (string, error) {
 	psk := make([]byte, PSKSize)
 	if _, err := rand.Read(psk); err != nil {
-		return "", err
+		return "", fmt.Errorf("生成随机数失败: %w", err)
 	}
 	return base64.StdEncoding.EncodeToString(psk), nil
 }
