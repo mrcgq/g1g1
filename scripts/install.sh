@@ -29,7 +29,7 @@ set -e
 # 全局变量
 #═══════════════════════════════════════════════════════════════════════════════
 
-VERSION="2.0.0"
+VERSION="1.0.3"
 SCRIPT_VERSION="1.0.0"
 GITHUB_REPO="anthropics/phantom-server"
 
