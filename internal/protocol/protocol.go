@@ -8,8 +8,8 @@ import (
 
 // 数据包类型
 const (
-	TypeRequest  = 0x01 // 客户端请求
-	TypeResponse = 0x02 // 服务端响应
+	TypeRequest  = 0x01
+	TypeResponse = 0x02
 )
 
 // 地址类型
@@ -19,20 +19,25 @@ const (
 	AddrDomain = 0x03
 )
 
+// 网络类型
+const (
+	NetworkTCP = 0x01
+	NetworkUDP = 0x02
+)
+
 // Request 解析后的请求
 type Request struct {
-	Type     byte   // 请求类型
-	Network  string // "tcp" 或 "udp"
-	Address  string // 目标地址（IP 或域名）
-	Port     uint16 // 目标端口
-	Data     []byte // 载荷数据
+	Type     byte
+	Network  string
+	Address  string
+	Port     uint16
+	Data     []byte
 }
 
 // ParseRequest 解析请求
-// 格式: [Type(1)] + [Network(1)] + [AddrType(1)] + [Address(变长)] + [Port(2)] + [Data(变长)]
 func ParseRequest(data []byte) (*Request, error) {
 	if len(data) < 5 {
-		return nil, fmt.Errorf("数据太短")
+		return nil, fmt.Errorf("数据太短: %d", len(data))
 	}
 
 	req := &Request{
@@ -41,9 +46,9 @@ func ParseRequest(data []byte) (*Request, error) {
 
 	// Network
 	switch data[1] {
-	case 0x01:
+	case NetworkTCP:
 		req.Network = "tcp"
-	case 0x02:
+	case NetworkUDP:
 		req.Network = "udp"
 	default:
 		return nil, fmt.Errorf("未知网络类型: %d", data[1])
@@ -100,7 +105,6 @@ func ParseRequest(data []byte) (*Request, error) {
 }
 
 // BuildResponse 构建响应
-// 格式: [Type(1)] + [Status(1)] + [Data(变长)]
 func BuildResponse(data []byte) []byte {
 	resp := make([]byte, 2+len(data))
 	resp[0] = TypeResponse
