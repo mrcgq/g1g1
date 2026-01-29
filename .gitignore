@@ -11,6 +11,7 @@ phantom-server-*
 # 测试
 coverage.out
 *.test
+*.out
 
 # IDE
 .idea/
@@ -23,12 +24,14 @@ coverage.out
 .DS_Store
 Thumbs.db
 
-# 日志
-*.log
-
-# 配置（包含敏感信息）
+# 配置（敏感信息）
 config.yaml
 !configs/config.example.yaml
 
-# 依赖
-/vendor/
+# 日志
+*.log
+logs/
+
+# 临时文件
+/tmp/
+*.tmp
