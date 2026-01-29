@@ -1,4 +1,4 @@
-module github.com/anthropics/phantom-server
+module github.com/mrcgq/g1g1
 
 go 1.21
 
