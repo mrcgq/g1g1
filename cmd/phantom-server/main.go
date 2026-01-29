@@ -10,8 +10,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/anthropics/phantom-server/internal/crypto"
-	"github.com/anthropics/phantom-server/internal/server"
+	"github.com/mrcgq/g1g1/internal/crypto"
+	"github.com/mrcgq/g1g1/internal/server"
 )
 
 var (
