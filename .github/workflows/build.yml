@@ -1,7 +1,3 @@
-#═══════════════════════════════════════════════════════════════════
-# Phantom Server v2.0 - 构建和测试
-#═══════════════════════════════════════════════════════════════════
-
 name: Build
 
 on:
@@ -13,18 +9,12 @@ on:
       - 'scripts/**'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
 
 env:
   GO_VERSION: '1.21'
   BINARY_NAME: phantom-server
 
 jobs:
-  # ═══════════════════════════════════════════════════════════════
-  # 代码检查
-  # ═══════════════════════════════════════════════════════════════
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -37,19 +27,23 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+          cache-dependency-path: go.sum
 
       - name: 下载依赖
-        run: go mod download
+        run: |
+          go mod download
+          go mod tidy
+
+      - name: 验证构建
+        run: go build ./...
 
       - name: 代码检查
         uses: golangci/golangci-lint-action@v4
         with:
-          version: v1.54
+          version: v1.54.2
           args: --timeout=5m
+          skip-cache: true
 
-  # ═══════════════════════════════════════════════════════════════
-  # 单元测试
-  # ═══════════════════════════════════════════════════════════════
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -63,6 +57,7 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+          cache-dependency-path: go.sum
 
       - name: 下载依赖
         run: go mod download
@@ -70,15 +65,6 @@ jobs:
       - name: 运行测试
         run: go test -v -race -coverprofile=coverage.out ./...
 
-      - name: 上传覆盖率
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./coverage.out
-          fail_ci_if_error: false
-
-  # ═══════════════════════════════════════════════════════════════
-  # 多平台构建测试
-  # ═══════════════════════════════════════════════════════════════
   build:
     name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ubuntu-latest
@@ -91,9 +77,6 @@ jobs:
             goarch: amd64
           - goos: linux
             goarch: arm64
-          - goos: linux
-            goarch: arm
-            goarm: 7
           - goos: darwin
             goarch: amd64
           - goos: darwin
@@ -101,8 +84,6 @@ jobs:
           - goos: windows
             goarch: amd64
             ext: .exe
-          - goos: freebsd
-            goarch: amd64
 
     steps:
       - name: 检出代码
@@ -115,6 +96,7 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+          cache-dependency-path: go.sum
 
       - name: 下载依赖
         run: go mod download
@@ -130,13 +112,9 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          GOARM: ${{ matrix.goarm }}
           CGO_ENABLED: 0
         run: |
-          ARCH_SUFFIX="${{ matrix.goarch }}"
-          [[ "${{ matrix.goarch }}" == "arm" ]] && ARCH_SUFFIX="armv${{ matrix.goarm }}"
-          
-          OUTPUT="${{ env.BINARY_NAME }}-${{ matrix.goos }}-${ARCH_SUFFIX}${{ matrix.ext }}"
+          OUTPUT="${{ env.BINARY_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
           
           go build -trimpath \
             -ldflags "-s -w \
@@ -155,9 +133,6 @@ jobs:
           path: ${{ env.BINARY_NAME }}-*
           retention-days: 7
 
-  # ═══════════════════════════════════════════════════════════════
-  # 构建状态汇总
-  # ═══════════════════════════════════════════════════════════════
   build-status:
     name: Build Status
     runs-on: ubuntu-latest
