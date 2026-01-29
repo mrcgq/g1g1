@@ -1,7 +1,6 @@
 package crypto
 
 import (
-	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
