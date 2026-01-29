@@ -12,28 +12,28 @@ import (
 	"github.com/anthropics/phantom-server/internal/protocol"
 )
 
-// Server UDP 代理服务器
-type Server struct {
-	listenAddr string
-	crypto     *crypto.Crypto
-	conn       *net.UDPConn
-	logLevel   int // 0=error, 1=info, 2=debug
-
-	// 简单的防重放（基于 nonce，无需状态清理）
-	replayCache sync.Map
-}
-
 const (
 	logError = 0
 	logInfo  = 1
 	logDebug = 2
 )
 
+// Server UDP 代理服务器
+type Server struct {
+	listenAddr string
+	crypto     *crypto.Crypto
+	conn       *net.UDPConn
+	logLevel   int
+
+	// 简单的防重放（基于 nonce）
+	replayCache sync.Map
+}
+
 // New 创建服务器
 func New(listenAddr, psk string, timeWindow int, logLevel string) (*Server, error) {
 	c, err := crypto.New(psk, timeWindow)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("初始化加密模块失败: %w", err)
 	}
 
 	level := logInfo
@@ -65,8 +65,8 @@ func (s *Server) Run(ctx context.Context) error {
 	defer s.conn.Close()
 
 	// 设置缓冲区
-	s.conn.SetReadBuffer(4 * 1024 * 1024)
-	s.conn.SetWriteBuffer(4 * 1024 * 1024)
+	_ = s.conn.SetReadBuffer(4 * 1024 * 1024)
+	_ = s.conn.SetWriteBuffer(4 * 1024 * 1024)
 
 	s.log(logInfo, "服务器已启动，监听 %s", s.listenAddr)
 	s.log(logInfo, "UserID: %x", s.crypto.GetUserID())
@@ -79,11 +79,12 @@ func (s *Server) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
+			s.log(logInfo, "服务器正在关闭...")
 			return nil
 		default:
 		}
 
-		s.conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+		_ = s.conn.SetReadDeadline(time.Now().Add(1 * time.Second))
 		n, remoteAddr, err := s.conn.ReadFromUDP(buf)
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
@@ -93,20 +94,27 @@ func (s *Server) Run(ctx context.Context) error {
 			continue
 		}
 
-		// 异步处理
+		if n == 0 {
+			continue
+		}
+
+		// 复制数据进行处理
 		packet := make([]byte, n)
 		copy(packet, buf[:n])
+
+		// 异步处理
 		go s.handlePacket(packet, remoteAddr)
 	}
 }
 
 // handlePacket 处理单个数据包
 func (s *Server) handlePacket(data []byte, from *net.UDPAddr) {
-	// 1. 快速过滤：检查 UserID
-	if len(data) < crypto.HeaderSize {
+	// 1. 快速过滤：检查长度
+	if len(data) < crypto.HeaderSize+crypto.NonceSize+crypto.TagSize {
 		return // 静默丢弃
 	}
 
+	// 2. 快速过滤：检查 UserID
 	var userID [crypto.UserIDSize]byte
 	copy(userID[:], data[:crypto.UserIDSize])
 	if userID != s.crypto.GetUserID() {
@@ -114,24 +122,21 @@ func (s *Server) handlePacket(data []byte, from *net.UDPAddr) {
 		return // 静默丢弃
 	}
 
-	// 2. 防重放检查（使用 nonce 作为标识）
-	if len(data) < crypto.HeaderSize+crypto.NonceSize {
-		return
-	}
+	// 3. 防重放检查（使用 nonce 作为标识）
 	nonceKey := string(data[crypto.HeaderSize : crypto.HeaderSize+crypto.NonceSize])
 	if _, exists := s.replayCache.LoadOrStore(nonceKey, time.Now()); exists {
 		s.log(logDebug, "检测到重放，丢弃")
 		return
 	}
 
-	// 3. 解密
+	// 4. 解密
 	plaintext, err := s.crypto.Decrypt(data)
 	if err != nil {
 		s.log(logDebug, "解密失败: %v", err)
 		return // 静默丢弃
 	}
 
-	// 4. 解析请求
+	// 5. 解析请求
 	req, err := protocol.ParseRequest(plaintext)
 	if err != nil {
 		s.log(logDebug, "解析请求失败: %v", err)
@@ -140,19 +145,19 @@ func (s *Server) handlePacket(data []byte, from *net.UDPAddr) {
 
 	s.log(logDebug, "请求: %s %s", req.Network, req.TargetAddr())
 
-	// 5. 转发到目标
+	// 6. 转发到目标
 	response, err := s.forward(req)
 	if err != nil {
 		s.log(logDebug, "转发失败: %v", err)
 		// 发送错误响应
 		errResp := protocol.BuildErrorResponse(0x01)
-		if encrypted, err := s.crypto.Encrypt(errResp); err == nil {
-			s.conn.WriteToUDP(encrypted, from)
+		if encrypted, encErr := s.crypto.Encrypt(errResp); encErr == nil {
+			_, _ = s.conn.WriteToUDP(encrypted, from)
 		}
 		return
 	}
 
-	// 6. 加密响应
+	// 7. 加密响应
 	respData := protocol.BuildResponse(response)
 	encrypted, err := s.crypto.Encrypt(respData)
 	if err != nil {
@@ -160,8 +165,8 @@ func (s *Server) handlePacket(data []byte, from *net.UDPAddr) {
 		return
 	}
 
-	// 7. 发送响应
-	s.conn.WriteToUDP(encrypted, from)
+	// 8. 发送响应
+	_, _ = s.conn.WriteToUDP(encrypted, from)
 	s.log(logDebug, "响应已发送: %d bytes", len(encrypted))
 }
 
@@ -181,25 +186,25 @@ func (s *Server) forward(req *protocol.Request) ([]byte, error) {
 func (s *Server) forwardTCP(req *protocol.Request) ([]byte, error) {
 	conn, err := net.DialTimeout("tcp", req.TargetAddr(), 10*time.Second)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("连接目标失败: %w", err)
 	}
 	defer conn.Close()
 
 	// 设置超时
-	conn.SetDeadline(time.Now().Add(30 * time.Second))
+	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 
 	// 发送数据
 	if len(req.Data) > 0 {
 		if _, err := conn.Write(req.Data); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("发送数据失败: %w", err)
 		}
 	}
 
-	// 读取响应（最多 4KB，适合大多数场景）
+	// 读取响应（最多 4KB）
 	response := make([]byte, 4096)
 	n, err := conn.Read(response)
 	if err != nil && err != io.EOF {
-		return nil, err
+		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
 
 	return response[:n], nil
@@ -209,28 +214,28 @@ func (s *Server) forwardTCP(req *protocol.Request) ([]byte, error) {
 func (s *Server) forwardUDP(req *protocol.Request) ([]byte, error) {
 	addr, err := net.ResolveUDPAddr("udp", req.TargetAddr())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("解析地址失败: %w", err)
 	}
 
 	conn, err := net.DialUDP("udp", nil, addr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("连接目标失败: %w", err)
 	}
 	defer conn.Close()
 
 	// 设置超时
-	conn.SetDeadline(time.Now().Add(10 * time.Second))
+	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
 
 	// 发送数据
 	if _, err := conn.Write(req.Data); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("发送数据失败: %w", err)
 	}
 
 	// 读取响应
 	response := make([]byte, 4096)
 	n, err := conn.Read(response)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
 
 	return response[:n], nil
